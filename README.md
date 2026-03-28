@@ -1,2 +1,2 @@
 # RussianMangaReader
-LINQ style highlighting and vocabulary for images
+Chrome plugin. LINQ style highlighting and vocabulary for images
