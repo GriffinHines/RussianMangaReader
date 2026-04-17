@@ -17,7 +17,7 @@
   let selectionMode = false;
   let selectionStart = null;
   let selectionBox = null;
-  let fHeld = false;
+  let bHeld = false;
   let lastPointer = null;
 
   function ensureHud() {
@@ -56,6 +56,7 @@
 
   function ensureButton() {
     if (button) return button;
+
     button = document.createElement("button");
     button.textContent = "Help";
     button.style.position = "fixed";
@@ -84,7 +85,8 @@
       setHud(
         [
           "Key commands:",
-          "F = hold and drag to OCR a selected area",
+          "B = hold and drag to OCR a selected area",
+          "Shift+B = OCR the whole visible screen",
           "G = open the hovered word",
           "Esc = cancel selection / close popup"
         ].join("\n")
@@ -99,7 +101,7 @@
   function setButtonBusy(busy) {
     const btn = ensureButton();
     btn.disabled = busy;
-    btn.textContent = busy ? "Help" : "Help";
+    btn.textContent = "Help";
     btn.style.opacity = busy ? "0.7" : "1";
     btn.style.cursor = busy ? "default" : "pointer";
   }
@@ -145,7 +147,7 @@
     selectionMode = true;
     selectionStart = null;
     ensureSelectionBox().style.display = "none";
-    setHud("Hold F and drag");
+    setHud("Hold B and drag");
   }
 
   function stopSelectionMode() {
@@ -582,7 +584,6 @@
       mergedWords.push(current);
     }
 
-    console.log("OCR WORDS SORTED", words.map(w => w.text));
     if (mergedWords.length) {
       return dedupeBoxes(mergedWords);
     }
@@ -602,6 +603,7 @@
 
     if (tsvItems.length) {
       const mergedTsv = [];
+
       for (let i = 0; i < tsvItems.length; i++) {
         let current = tsvItems[i];
         let currentText = (current.text || "").trim();
@@ -648,6 +650,7 @@
       });
 
     const mergedHocr = [];
+
     for (let i = 0; i < hocrItems.length; i++) {
       let current = hocrItems[i];
       let currentText = (current.text || "").trim();
@@ -899,33 +902,33 @@
     }
 
     function saveEdit() {
-  const cleaned = input.value.trim();
-  if (!cleaned) return;
+      const cleaned = input.value.trim();
+      if (!cleaned) return;
 
-  updateBoxWord(box, cleaned);
-  titleEl.textContent = cleaned;
+      updateBoxWord(box, cleaned);
+      titleEl.textContent = cleaned;
 
-  const translationEl = popupEl && popupEl.querySelector
-    ? popupEl.querySelector("[data-translation]")
-    : null;
+      const translationEl = popupEl && popupEl.querySelector
+        ? popupEl.querySelector("[data-translation]")
+        : null;
 
-  if (translationEl) {
-    translationEl.textContent = "Translating...";
-    translateWordToEnglish(cleaned)
-      .then((translated) => {
-        if ((box.dataset.word || "") !== cleaned) return;
-        translationEl.textContent = translated
-          ? decodeHtmlEntities(translated)
-          : "(no translation)";
-      })
-      .catch((err) => {
-        console.error("Translation error:", err);
-        translationEl.textContent = "(translation failed)";
-      });
-  }
+      if (translationEl) {
+        translationEl.textContent = "Translating...";
+        translateWordToEnglish(cleaned)
+          .then((translated) => {
+            if ((box.dataset.word || "") !== cleaned) return;
+            translationEl.textContent = translated
+              ? decodeHtmlEntities(translated)
+              : "(no translation)";
+          })
+          .catch((err) => {
+            console.error("Translation error:", err);
+            translationEl.textContent = "(translation failed)";
+          });
+      }
 
-  closeEditor();
-}
+      closeEditor();
+    }
 
     saveBtn.onclick = (e) => {
       e.stopPropagation();
@@ -942,10 +945,6 @@
         e.preventDefault();
         e.stopPropagation();
         saveEdit();
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopPropagation();
-        closeEditor();
       }
     });
 
@@ -1011,7 +1010,7 @@
       e.stopPropagation();
 
       const existing = el ? el.querySelector("input[type='text']") : null;
-if (existing) return;
+      if (existing) return;
 
       createMiniEditUI(box, title, el);
     };
@@ -1097,115 +1096,142 @@ if (existing) return;
     el.style.top = `${Math.max(margin, top)}px`;
   }
 
-  document.addEventListener("mousemove", (e) => {
-    lastPointer = { x: e.clientX, y: e.clientY };
+  document.addEventListener(
+    "mousemove",
+    (e) => {
+      lastPointer = { x: e.clientX, y: e.clientY };
 
-    if (!fHeld || !selectionMode) return;
+      if (!bHeld || !selectionMode) return;
 
-    const box = ensureSelectionBox();
+      const box = ensureSelectionBox();
 
-    if (!selectionStart) {
-      selectionStart = { x: e.clientX, y: e.clientY };
-      box.style.left = `${e.clientX}px`;
-      box.style.top = `${e.clientY}px`;
-      box.style.width = "0px";
-      box.style.height = "0px";
-      box.style.display = "block";
-      return;
-    }
-
-    const left = Math.min(selectionStart.x, e.clientX);
-    const top = Math.min(selectionStart.y, e.clientY);
-    const width = Math.abs(e.clientX - selectionStart.x);
-    const height = Math.abs(e.clientY - selectionStart.y);
-
-    box.style.left = `${left}px`;
-    box.style.top = `${top}px`;
-    box.style.width = `${width}px`;
-    box.style.height = `${height}px`;
-  }, true);
-
-  document.addEventListener("keydown", (e) => {
-    const ae = document.activeElement;
-    const tag = ae?.tagName;
-
-    if (tag === "INPUT" || tag === "TEXTAREA" || ae?.isContentEditable) return;
-
-    if (((e.key === "b" || e.key === "B") || (e.key === "б" || e.key === "Б")) && !e.repeat) {
-      fHeld = true;
-      startSelectionMode();
-
-      if (lastPointer) {
-        selectionStart = { ...lastPointer };
-        const box = ensureSelectionBox();
-        box.style.left = `${lastPointer.x}px`;
-        box.style.top = `${lastPointer.y}px`;
+      if (!selectionStart) {
+        selectionStart = { x: e.clientX, y: e.clientY };
+        box.style.left = `${e.clientX}px`;
+        box.style.top = `${e.clientY}px`;
         box.style.width = "0px";
         box.style.height = "0px";
         box.style.display = "block";
+        return;
       }
+
+      const left = Math.min(selectionStart.x, e.clientX);
+      const top = Math.min(selectionStart.y, e.clientY);
+      const width = Math.abs(e.clientX - selectionStart.x);
+      const height = Math.abs(e.clientY - selectionStart.y);
+
+      box.style.left = `${left}px`;
+      box.style.top = `${top}px`;
+      box.style.width = `${width}px`;
+      box.style.height = `${height}px`;
+    },
+    true
+  );
+
+  document.addEventListener(
+    "keydown",
+    (e) => {
+      const ae = document.activeElement;
+      const tag = ae?.tagName;
+
+      if (tag === "INPUT" || tag === "TEXTAREA" || ae?.isContentEditable) {
+        return;
+      }
+
+      if (
+        ((e.key === "b" || e.key === "B") || (e.key === "б" || e.key === "Б")) &&
+        !e.repeat
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (e.shiftKey) {
+          bHeld = false;
+          stopSelectionMode();
+          processWholeVisibleScreen();
+          return;
+        }
+
+        bHeld = true;
+        startSelectionMode();
+
+        if (lastPointer) {
+          selectionStart = { ...lastPointer };
+          const box = ensureSelectionBox();
+          box.style.left = `${lastPointer.x}px`;
+          box.style.top = `${lastPointer.y}px`;
+          box.style.width = "0px";
+          box.style.height = "0px";
+          box.style.display = "block";
+        }
+
+        return;
+      }
+
+      if (((e.key === "g" || e.key === "G") || (e.key === "г" || e.key === "Г")) && !e.repeat) {
+        if (hoveredBox) {
+          const rect = hoveredBox.getBoundingClientRect();
+          showPopupForBox(
+            hoveredBox,
+            hoveredBox.dataset.word,
+            rect.left + rect.width / 2,
+            rect.top + rect.height / 2
+          );
+        }
+        return;
+      }
+
+      if (e.key === "Escape") {
+        bHeld = false;
+        stopSelectionMode();
+
+        if (popup) popup.style.display = "none";
+
+        setHud("Selection cancelled");
+        clearHudLater();
+      }
+    },
+    true
+  );
+
+  document.addEventListener(
+    "keyup",
+    (e) => {
+      if (!["b", "B", "б", "Б"].includes(e.key)) return;
 
       e.preventDefault();
       e.stopPropagation();
-      return;
-    }
 
-    if (((e.key === "g" || e.key === "G") || (e.key === "г" || e.key === "Г")) && !e.repeat) {
-      if (hoveredBox) {
-        const rect = hoveredBox.getBoundingClientRect();
-        showPopupForBox(
-          hoveredBox,
-          hoveredBox.dataset.word,
-          rect.left + rect.width / 2,
-          rect.top + rect.height / 2
-        );
+      if (e.shiftKey) return;
+
+      bHeld = false;
+
+      if (!selectionStart || !selectionBox) {
+        stopSelectionMode();
+        clearHudLater();
+        return;
       }
-      return;
-    }
 
-    if (e.key === "Escape") {
-      fHeld = false;
+      const rect = selectionBox.getBoundingClientRect();
+      const sel = {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height
+      };
+
       stopSelectionMode();
 
-      if (popup) popup.style.display = "none";
+      if (sel.width < 8 || sel.height < 8) {
+        setHud("Selection too small");
+        clearHudLater();
+        return;
+      }
 
-      setHud("Selection cancelled");
-      clearHudLater();
-    }
-  }, true);
-
-  document.addEventListener("keyup", (e) => {
-    if (!["b", "B", "б", "Б"].includes(e.key)) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-
-    fHeld = false;
-
-    if (!selectionStart || !selectionBox) {
-      stopSelectionMode();
-      clearHudLater();
-      return;
-    }
-
-    const rect = selectionBox.getBoundingClientRect();
-    const sel = {
-      left: rect.left,
-      top: rect.top,
-      width: rect.width,
-      height: rect.height
-    };
-
-    stopSelectionMode();
-
-    if (sel.width < 8 || sel.height < 8) {
-      setHud("Selection too small");
-      clearHudLater();
-      return;
-    }
-
-    processSelectedArea(sel);
-  }, true);
+      processSelectedArea(sel);
+    },
+    true
+  );
 
   document.addEventListener("click", (e) => {
     if (!popup) return;
@@ -1273,7 +1299,11 @@ if (existing) return;
         }
 
         const current = i + 1;
-        setHud(`Processing image ${current}/${total}...\n${done}/${total} (${Math.round((done / total) * 100)}%)`);
+        setHud(
+          `Processing image ${current}/${total}...\n${done}/${total} (${Math.round(
+            (done / total) * 100
+          )}%)`
+        );
 
         try {
           const canvas = await crop(shot, img);
@@ -1365,6 +1395,68 @@ if (existing) return;
     } catch (e) {
       console.error("Selected area OCR failed:", e);
       setHud(`Selection OCR failed:\n${e.message || e}`);
+      clearHudLater(3500);
+    } finally {
+      isProcessing = false;
+      setButtonBusy(false);
+    }
+  }
+
+  async function processWholeVisibleScreen() {
+    if (isProcessing) return;
+    isProcessing = true;
+    setButtonBusy(true);
+
+    try {
+      setHud("Capturing visible screen...");
+
+      const shot = await capture();
+      const worker = await getWorker();
+
+      const rect = {
+        left: 0,
+        top: 0,
+        width: window.innerWidth,
+        height: window.innerHeight
+      };
+
+      const canvas = await cropRectFromScreen(shot, rect);
+      const prep = preprocessForText(canvas);
+
+      setHud("Running OCR on visible screen...");
+
+      const result = await worker.recognize(
+        prep,
+        {},
+        { text: true, tsv: true, hocr: true }
+      );
+
+      let items = extractTextBoxes(result);
+      items = dedupeBoxes(items);
+      items = filterLonelyBoxes(items);
+
+      clearOverlay();
+
+      const upscale = 3;
+      const sx = rect.width / canvas.width;
+      const sy = rect.height / canvas.height;
+      const imageKey = `viewport:${window.innerWidth}x${window.innerHeight}`;
+
+      for (const item of items) {
+        const x = rect.left + (item.bbox.x0 / upscale) * sx;
+        const y = rect.top + (item.bbox.y0 / upscale) * sy;
+        const w = ((item.bbox.x1 - item.bbox.x0) / upscale) * sx;
+        const h = ((item.bbox.y1 - item.bbox.y0) / upscale) * sy;
+        const highlightKey = makeHighlightKey(imageKey, item);
+
+        drawViewportBox(x, y, w, h, item.text, highlightKey);
+      }
+
+      setHud(`Visible screen OCR complete\n${items.length} boxes`);
+      clearHudLater();
+    } catch (e) {
+      console.error("Visible screen OCR failed:", e);
+      setHud(`Visible screen OCR failed:\n${e.message || e}`);
       clearHudLater(3500);
     } finally {
       isProcessing = false;
