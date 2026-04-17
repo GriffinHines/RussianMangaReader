@@ -91,7 +91,7 @@
           "Esc = cancel selection / close popup"
         ].join("\n")
       );
-      clearHudLater(5000);
+      clearHudLater(20000);
     });
 
     document.documentElement.appendChild(button);
