@@ -85,6 +85,7 @@
       setHud(
         [
           "Key commands:",
+		  "? = search for the translation of a Russian word or sentence",
           "B = hold and drag to OCR a selected area",
           "Shift+B = OCR the whole visible screen",
           "G = open the hovered word",
@@ -762,6 +763,108 @@
     return translated;
   }
 
+  function openTranslationInput(x, y) {
+  // Remove an existing input
+  const existing = document.getElementById("__ocr_translate_input__");
+  if (existing) existing.remove();
+
+  const wrap = document.createElement("div");
+  wrap.id = "__ocr_translate_input__";
+  wrap.style.position = "fixed";
+  wrap.style.left = `${Math.max(10, Math.min(x, window.innerWidth - 300))}px`;
+  wrap.style.top = `${Math.max(10, Math.min(y, window.innerHeight - 100))}px`;
+  wrap.style.zIndex = "2147483647";
+  wrap.style.width = "280px";
+  wrap.style.padding = "10px";
+  wrap.style.background = "rgba(20,20,20,0.97)";
+  wrap.style.border = "1px solid #555";
+  wrap.style.borderRadius = "10px";
+  wrap.style.boxShadow = "0 4px 15px rgba(0,0,0,0.4)";
+  wrap.style.font = "13px Arial";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.placeholder = "Введите русское слово...";
+  input.style.width = "100%";
+  input.style.boxSizing = "border-box";
+  input.style.padding = "9px";
+  input.style.background = "#111";
+  input.style.color = "#fff";
+  input.style.border = "1px solid #555";
+  input.style.borderRadius = "6px";
+  input.style.outline = "none";
+  input.style.font = "14px Arial";
+
+  const result = document.createElement("div");
+  result.style.marginTop = "9px";
+  result.style.color = "#ddd";
+  result.style.fontSize = "13px";
+  result.style.minHeight = "16px";
+  result.style.whiteSpace = "pre-wrap";
+
+  let translationTimer = null;
+  let requestId = 0;
+  let closed = false;
+
+  const close = () => {
+    closed = true;
+    clearTimeout(translationTimer);
+    requestId++;
+    wrap.remove();
+  };
+
+  // Automatically translate while typing
+  input.addEventListener("input", () => {
+    clearTimeout(translationTimer);
+
+    const word = input.value.trim();
+    const currentRequest = ++requestId;
+
+    if (!word) {
+      result.textContent = "";
+      return;
+    }
+
+    result.textContent = "Translating...";
+
+    translationTimer = setTimeout(async () => {
+      try {
+        const translated = await translateWordToEnglish(word);
+
+        // Ignore outdated responses
+        if (closed || currentRequest !== requestId) return;
+
+        // Make sure the input hasn't changed
+        if (input.value.trim() !== word) return;
+
+        result.textContent = translated || "(no translation)";
+
+      } catch (err) {
+        if (closed || currentRequest !== requestId) return;
+
+        console.error("Translation error:", err);
+        result.textContent = "Translation failed";
+      }
+    }, 350);
+  });
+
+  // Escape closes the translation window
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+    }
+  });
+
+  wrap.appendChild(input);
+  wrap.appendChild(result);
+
+  document.documentElement.appendChild(wrap);
+
+  input.focus();
+}
+
   function decodeHtmlEntities(str) {
     const t = document.createElement("textarea");
     t.innerHTML = str || "";
@@ -1133,7 +1236,16 @@
     (e) => {
       const ae = document.activeElement;
       const tag = ae?.tagName;
+	  if (e.key === "?" || (e.key === "/" && e.shiftKey)) {
+		e.preventDefault();
+		e.stopPropagation();
 
+		const x = lastPointer?.x ?? window.innerWidth / 2;
+		const y = lastPointer?.y ?? window.innerHeight / 2;
+
+		openTranslationInput(x, y);
+		return;
+	  }
       if (tag === "INPUT" || tag === "TEXTAREA" || ae?.isContentEditable) {
         return;
       }
